@@ -225,7 +225,15 @@ func nomsValueEncoder(v reflect.Value) types.Value {
 
 func marshalerEncoder(vrw types.ValueReadWriter, t reflect.Type) encoderFunc {
 	return func(v reflect.Value) types.Value {
-		val, err := v.Interface().(Marshaler).MarshalNoms(vrw)
+		var val types.Value
+		var err error
+
+		if v.IsValid() {
+			val, err = v.Interface().(Marshaler).MarshalNoms(vrw)
+		} else {
+			val,err = reflect.New(t).Interface().(Marshaler).MarshalNoms(vrw)
+		}
+
 		if err != nil {
 			panic(&marshalNomsError{err})
 		}
@@ -239,6 +247,10 @@ func marshalerEncoder(vrw types.ValueReadWriter, t reflect.Type) encoderFunc {
 func typeEncoder(vrw types.ValueReadWriter, t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTags) encoderFunc {
 	if t.Implements(marshalerInterface) {
 		return marshalerEncoder(vrw, t)
+	}
+
+	if encoder := GetEncoder(t); encoder != nil {
+		return encoder
 	}
 
 	switch t.Kind() {
@@ -275,6 +287,7 @@ func typeEncoder(vrw types.ValueReadWriter, t reflect.Type, seenStructs map[stri
 		if t.Implements(nomsValueInterface) {
 			return nomsValueEncoder
 		}
+
 		fallthrough
 	default:
 		panic(&UnsupportedTypeError{Type: t})
@@ -312,8 +325,16 @@ func structEncoder(vrw types.ValueReadWriter, t reflect.Type, seenStructs map[st
 		structTemplate := types.MakeStructTemplate(structName, fieldNames)
 		e = func(v reflect.Value) types.Value {
 			values := make(types.ValueSlice, len(fields))
+			if v.Kind() == reflect.Ptr {
+				v = reflect.Indirect(v)
+			}
+
 			for i, f := range fields {
-				values[i] = f.encoder(v.FieldByIndex(f.index))
+				if !v.IsValid() {
+					values[i] = f.encoder(reflect.Value{})
+				} else {
+					values[i] = f.encoder(v.FieldByIndex(f.index))
+				}
 			}
 			return structTemplate.NewStruct(values)
 		}
@@ -505,9 +526,17 @@ func typeFields(vrw types.ValueReadWriter, t reflect.Type, seenStructs map[strin
 			knownShape = false
 		}
 
+		var encoder encoderFunc
+
+		if f.Type.Kind() == reflect.Ptr {
+			encoder = typeEncoder(vrw, f.Type.Elem(), seenStructs, tags)
+		} else {
+			encoder = typeEncoder(vrw, f.Type, seenStructs, tags)
+		}
+
 		fields = append(fields, field{
 			name:      tags.name,
-			encoder:   typeEncoder(vrw, f.Type, seenStructs, tags),
+			encoder:   encoder,
 			index:     index,
 			nomsType:  nt,
 			omitEmpty: tags.omitEmpty,
@@ -627,7 +656,17 @@ func mapEncoder(vrw types.ValueReadWriter, t reflect.Type, seenStructs map[strin
 
 	encoderCache.set(t, e)
 	keyEncoder = typeEncoder(vrw, t.Key(), seenStructs, nomsTags{})
-	valueEncoder = typeEncoder(vrw, t.Elem(), seenStructs, nomsTags{})
+
+
+	var t2 reflect.Type
+
+	if t.Elem().Kind() == reflect.Ptr {
+		t2 = t.Elem().Elem()
+	} else {
+		t2 = t.Elem()
+	}
+
+	valueEncoder = typeEncoder(vrw, t2, seenStructs, nomsTags{})
 	return e
 }
 

@@ -174,6 +174,10 @@ func typeDecoder(t reflect.Type, tags nomsTags) decoderFunc {
 		return marshalerDecoder(t)
 	}
 
+	if decoder := GetDecoder(t); decoder != nil {
+		return decoder
+	}
+
 	switch t.Kind() {
 	case reflect.Bool:
 		return boolDecoder
@@ -313,9 +317,18 @@ func structDecoderFields(t reflect.Type) []decField {
 
 		validateField(f, t)
 
+
+		var decoder decoderFunc
+
+		if f.Type.Kind() == reflect.Ptr {
+			decoder = typeDecoder(f.Type.Elem(), tags)
+		} else {
+			decoder = typeDecoder(f.Type, tags)
+		}
+
 		fields = append(fields, decField{
 			name:      tags.name,
-			decoder:   typeDecoder(f.Type, tags),
+			decoder:   decoder,
 			index:     index,
 			omitEmpty: tags.omitEmpty,
 			original:  tags.original,
@@ -337,18 +350,34 @@ func structDecoder(t reflect.Type) decoderFunc {
 	fields := structDecoderFields(t)
 
 	d = func(v types.Value, rv reflect.Value) {
+
+		var typeElement reflect.Type
+		var newEl reflect.Value
+		var newElPointer reflect.Value
+
+		if rv.Type().Kind() == reflect.Ptr {
+			typeElement = rv.Type().Elem()
+			newElPointer = reflect.New(typeElement)
+			newEl = reflect.Indirect(newElPointer)
+		} else {
+			typeElement = rv.Type()
+			newEl = rv
+		}
+
+
 		s, ok := v.(types.Struct)
 		if !ok {
 			panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", expected struct"})
 		}
 
 		for _, f := range fields {
-			sf := rv.FieldByIndex(f.index)
+			sf := newEl.FieldByIndex(f.index)
+
 			if f.original {
 				if sf.Type() != reflect.TypeOf(s) {
 					panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", field with tag \"original\" must have type Struct"})
 				}
-				sf.Set(reflect.ValueOf(s))
+				rv.Set(reflect.ValueOf(s))
 				continue
 			}
 			fv, ok := s.MaybeGet(f.name)
@@ -356,6 +385,10 @@ func structDecoder(t reflect.Type) decoderFunc {
 				f.decoder(fv, sf)
 			} else if !f.omitEmpty {
 				panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", missing field \"" + f.name + "\""})
+			}
+
+			if rv.Type().Kind() == reflect.Ptr {
+				rv.Set(newElPointer)
 			}
 		}
 	}
@@ -378,7 +411,11 @@ func marshalerDecoder(t reflect.Type) decoderFunc {
 		if err != nil {
 			panic(&unmarshalNomsError{err})
 		}
-		rv.Set(ptr.Elem())
+		if rv.Kind() == reflect.Ptr {
+			rv.Set(ptr)
+		} else {
+			rv.Set(ptr.Elem())
+		}
 	}
 }
 
@@ -540,7 +577,16 @@ func mapDecoder(t reflect.Type, tags nomsTags) decoderFunc {
 
 	decoderCache.set(t, d)
 	keyDecoder = typeDecoder(t.Key(), nomsTags{})
-	valueDecoder = typeDecoder(t.Elem(), nomsTags{})
+
+	var t2 reflect.Type
+
+	if t.Elem().Kind() == reflect.Ptr {
+		t2 = t.Elem().Elem()
+	} else {
+		t2 = t.Elem()
+	}
+
+	valueDecoder = typeDecoder(t2, nomsTags{})
 	return d
 }
 

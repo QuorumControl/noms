@@ -157,7 +157,16 @@ func encodeType(vrw types.ValueReadWriter, t reflect.Type, seenStructs map[strin
 			return types.MakeSetType(keyType)
 		}
 
-		valueType := encodeType(vrw, t.Elem(), seenStructs, nomsTags{})
+
+		var t2 reflect.Type
+
+		if t.Elem().Kind() == reflect.Ptr {
+			t2 = t.Elem().Elem()
+		} else {
+			t2 = t.Elem()
+		}
+
+		valueType := encodeType(vrw, t2, seenStructs, nomsTags{})
 		if valueType != nil {
 			return types.MakeMapType(keyType, valueType)
 		}
@@ -180,6 +189,8 @@ func structEncodeType(vrw types.ValueReadWriter, t reflect.Type, seenStructs map
 		}
 		seenStructs[name] = t
 	}
+
+	fmt.Printf("structEncodeType: %v", t)
 
 	fields, knownShape, _ := typeFields(vrw, t, seenStructs, true, false)
 
