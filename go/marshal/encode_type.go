@@ -190,7 +190,7 @@ func structEncodeType(vrw types.ValueReadWriter, t reflect.Type, seenStructs map
 		seenStructs[name] = t
 	}
 
-	fmt.Printf("structEncodeType: %v", t)
+	//fmt.Printf("structEncodeType: %v", t)
 
 	fields, knownShape, _ := typeFields(vrw, t, seenStructs, true, false)
 

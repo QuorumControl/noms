@@ -166,8 +166,6 @@ func assertEncodeErrorMessage(t *testing.T, v interface{}, expectedMessage strin
 
 func TestInvalidTypes(t *testing.T) {
 	assertEncodeErrorMessage(t, make(chan int), "Type is not supported, type: chan int")
-	x := 42
-	assertEncodeErrorMessage(t, &x, "Type is not supported, type: *int")
 }
 
 func TestEncodeEmbeddedStructSkip(t *testing.T) {

@@ -293,17 +293,8 @@ func TestDecodeInvalidTypes(tt *testing.T) {
 		assertDecodeErrorMessage(tt, types.Number(42), p, "Type is not supported, type: "+ts)
 	}
 
-	var ptr *bool
-	t(&ptr, "*bool")
-
 	var c chan bool
 	t(&c, "chan bool")
-
-	type Nested struct {
-		X *bool
-	}
-	var n Nested
-	t(&n, "*bool")
 }
 
 func TestDecodeOverflows(tt *testing.T) {

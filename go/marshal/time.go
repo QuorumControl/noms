@@ -35,6 +35,8 @@ func timeDecoder(v types.Value, rv reflect.Value) {
 			panic(overflowError(types.Number(nanosSinceEpoch), rv.Type()))
 		}
 
+		fmt.Printf("rv is: %+v, kind: %v, type: %v\n", rv, rv.Kind(), rv.Type())
+
 		oldTime := time.Unix(0, nanosSinceEpoch)
 
 		newVal := reflect.ValueOf(&oldTime)
@@ -43,6 +45,8 @@ func timeDecoder(v types.Value, rv reflect.Value) {
 			newVal = reflect.Indirect(rv)
 		}
 
+
+		fmt.Printf("adding duration: %d", nanosSinceEpoch)
 		newVal.Interface().(*time.Time).Add(time.Duration(nanosSinceEpoch))
 		rv.Set(newVal)
 	} else {
