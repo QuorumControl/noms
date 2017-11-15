@@ -325,7 +325,7 @@ func structEncoder(vrw types.ValueReadWriter, t reflect.Type, seenStructs map[st
 		return nomsValueEncoder
 	}
 
-	e := encoderCache.get(t)
+	e := encoderCache.get(vrw, t)
 	if e != nil {
 		return e
 	}
@@ -394,7 +394,7 @@ func structEncoder(vrw types.ValueReadWriter, t reflect.Type, seenStructs map[st
 		}
 	}
 
-	encoderCache.set(t, e)
+	encoderCache.set(vrw, t, e)
 	return e
 }
 
@@ -435,7 +435,7 @@ func (fs fieldSlice) Less(i, j int) bool { return fs[i].name < fs[j].name }
 
 type encoderCacheT struct {
 	sync.RWMutex
-	m map[reflect.Type]encoderFunc
+	m map[types.ValueReadWriter]map[reflect.Type]encoderFunc
 }
 
 var encoderCache = &encoderCacheT{}
@@ -444,19 +444,23 @@ var encoderCache = &encoderCacheT{}
 // `noms:",set"` tag encode differently (Set vs Map).
 var setEncoderCache = &encoderCacheT{}
 
-func (c *encoderCacheT) get(t reflect.Type) encoderFunc {
+func (c *encoderCacheT) get(vrw types.ValueReadWriter, t reflect.Type) encoderFunc {
 	c.RLock()
 	defer c.RUnlock()
-	return c.m[t]
+	return c.m[vrw][t]
 }
 
-func (c *encoderCacheT) set(t reflect.Type, e encoderFunc) {
+func (c *encoderCacheT) set(vrw types.ValueReadWriter, t reflect.Type, e encoderFunc) {
 	c.Lock()
 	defer c.Unlock()
 	if c.m == nil {
-		c.m = map[reflect.Type]encoderFunc{}
+		c.m = map[types.ValueReadWriter]map[reflect.Type]encoderFunc{}
 	}
-	c.m[t] = e
+	if c.m[vrw] == nil {
+		c.m[vrw] = map[reflect.Type]encoderFunc{}
+	}
+
+	c.m[vrw][t] = e
 }
 
 func getTags(f reflect.StructField) (tags nomsTags) {
@@ -567,7 +571,7 @@ func typeFields(vrw types.ValueReadWriter, t reflect.Type, seenStructs map[strin
 }
 
 func listEncoder(vrw types.ValueReadWriter, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
-	e := encoderCache.get(t)
+	e := encoderCache.get(vrw, t)
 	if e != nil {
 		return e
 	}
@@ -587,14 +591,14 @@ func listEncoder(vrw types.ValueReadWriter, t reflect.Type, seenStructs map[stri
 		return types.NewList(vrw, values...)
 	}
 
-	encoderCache.set(t, e)
+	encoderCache.set(vrw, t, e)
 	elemEncoder = typeEncoder(vrw, t.Elem(), seenStructs, nomsTags{})
 	return e
 }
 
 // Encode set from array or slice
 func setFromListEncoder(vrw types.ValueReadWriter, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
-	e := setEncoderCache.get(t)
+	e := setEncoderCache.get(vrw, t)
 	if e != nil {
 		return e
 	}
@@ -614,13 +618,13 @@ func setFromListEncoder(vrw types.ValueReadWriter, t reflect.Type, seenStructs m
 		return types.NewSet(vrw, values...)
 	}
 
-	setEncoderCache.set(t, e)
+	setEncoderCache.set(vrw, t, e)
 	elemEncoder = typeEncoder(vrw, t.Elem(), seenStructs, nomsTags{})
 	return e
 }
 
 func setEncoder(vrw types.ValueReadWriter, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
-	e := setEncoderCache.get(t)
+	e := setEncoderCache.get(vrw, t)
 	if e != nil {
 		return e
 	}
@@ -640,13 +644,13 @@ func setEncoder(vrw types.ValueReadWriter, t reflect.Type, seenStructs map[strin
 		return types.NewSet(vrw, values...)
 	}
 
-	setEncoderCache.set(t, e)
+	setEncoderCache.set(vrw, t, e)
 	encoder = typeEncoder(vrw, t.Key(), seenStructs, nomsTags{})
 	return e
 }
 
 func mapEncoder(vrw types.ValueReadWriter, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
-	e := encoderCache.get(t)
+	e := encoderCache.get(vrw, t)
 	if e != nil {
 		return e
 	}
@@ -669,7 +673,7 @@ func mapEncoder(vrw types.ValueReadWriter, t reflect.Type, seenStructs map[strin
 		return types.NewMap(vrw, kvs...)
 	}
 
-	encoderCache.set(t, e)
+	encoderCache.set(vrw, t, e)
 	keyEncoder = typeEncoder(vrw, t.Key(), seenStructs, nomsTags{})
 
 	valueEncoder = typeEncoder(vrw, t.Elem(), seenStructs, nomsTags{})
