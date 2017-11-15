@@ -7,3 +7,4 @@ noms.iml
 .nomsconfig
 .DS_Store
 node_modules
+tmp

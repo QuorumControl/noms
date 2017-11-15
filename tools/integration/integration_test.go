@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"github.com/attic-labs/noms/go/marshal"
 	"github.com/spf13/afero"
-	"github.com/attic-labs/noms/go/nbs"
 	"testing"
 	"github.com/attic-labs/noms/go/chunks"
 	"os"
@@ -81,26 +80,21 @@ func NewCertificate() Certificate {
 
 
 func getIdentities(ds datas.Dataset) types.Map {
-	fmt.Println("maybe head value")
 	hv, ok := ds.MaybeHeadValue()
 	if ok {
-		fmt.Println("getIdentities: returning existing map\n")
 		return hv.(types.Map)
 	}
-	fmt.Println("getIdentities: returning empty map\n")
 	return types.NewMap(ds.Database())
 }
 
 
 
 func Save(ds datas.Dataset, id *IdentityLike) error {
-	fmt.Printf("database lsv: %d\n", ds.Database().GetIndex())
 	val,err := marshal.Marshal(ds.Database(), *id)
 	if err != nil {
 		return fmt.Errorf("error marshaling: %v", err)
 	}
 
-	fmt.Printf("database lsv: %d", ds.Database().GetIndex())
 
 	_, err = ds.Database().CommitValue(ds, getIdentities(ds).Edit().Set(types.String(id.UUID), val).Map())
 
@@ -111,23 +105,7 @@ func Save(ds datas.Dataset, id *IdentityLike) error {
 	return nil
 }
 
-func TestDoNothing(t *testing.T) {
-	fmt.Println("------------ test run -------------- \n")
-	fs := afero.NewOsFs()
-	fs.RemoveAll("tmp/noms")
-	fs.MkdirAll("tmp/noms", 0755)
-
-	sp := datas.NewDatabase(nbs.NewLocalStore("tmp/noms", DefaultMemTableSize))
-	defer sp.Close()
-
-	getIdentities(sp.GetDataset("identities"))
-
-	t.Fail()
-}
-
-
 func TestSaveAndUpdate(t *testing.T) {
-	fmt.Println("------------ test run -------------- \n")
 	fs := afero.NewOsFs()
 	fs.RemoveAll("tmp/noms")
 	fs.MkdirAll("tmp/noms", 0755)
@@ -142,8 +120,6 @@ func TestSaveAndUpdate(t *testing.T) {
 	sp := datas.NewDatabase((&chunks.MemoryStorage{}).NewView())
 	defer sp.Close()
 
-
-	fmt.Println("--- saving alice ---")
 	err := Save(sp.GetDataset("identities"), alice)
 
 	if err != nil {
@@ -156,12 +132,8 @@ func TestSaveAndUpdate(t *testing.T) {
 
 	alice.Devices[newDevice.UUID] = newDevice
 
-	fmt.Println("--- calling save with updated alice ---")
-
-	fmt.Printf("(in test) Dataset db lsv: %d\n", sp.GetIndex())
 	dataset := sp.GetDataset("identities")
 
-	fmt.Println("actually calling save")
 	trace.Start(traceFile)
 	err = Save(dataset, alice)
 	trace.Stop()
@@ -169,8 +141,6 @@ func TestSaveAndUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting fields: %v", err)
 	}
-
-	fmt.Println("--- fething alice ---")
 
 	hv, ok := sp.GetDataset("identities").MaybeHeadValue()
 	if ok {
