@@ -30,6 +30,10 @@ func init() {
 
 const DefaultMemTableSize = 8 * (1 << 20) // 8MB
 
+type SubStruct struct {
+	AStringKey string
+	AMapKey map[string]string
+}
 
 type IdentityLike struct {
 	RootCertificate Certificate
@@ -37,6 +41,7 @@ type IdentityLike struct {
 	Devices map[string]DeviceLike
 	Metadata map[string]string
 	UUID string
+	SubStruct *SubStruct
 }
 
 func NewIdentityLike() *IdentityLike {
@@ -159,6 +164,11 @@ func TestSaveAndUpdate(t *testing.T) {
 		if alice.UUID != dbAlice.UUID {
 			t.Errorf("alices were not equal\n\n alice:\n %v \n\ndbAlice:\n %v", alice, dbAlice)
 		}
+
+		if dbAlice.SubStruct.AStringKey != "" {
+			t.Errorf("error, did not correctly encod/decode sub struct: %v", dbAlice.SubStruct.AStringKey)
+		}
+
 
 	} else {
 		t.Fatalf("no head value")

@@ -218,6 +218,9 @@ func uintEncoder(v reflect.Value) types.Value {
 
 func stringEncoder(v reflect.Value) types.Value {
 	//fmt.Printf("string encoder: %v\n", v)
+	if !v.IsValid() {
+		return types.String("")
+	}
 	return types.String(reflect.Indirect(v).String())
 }
 
@@ -664,6 +667,9 @@ func mapEncoder(vrw types.ValueReadWriter, t reflect.Type, seenStructs map[strin
 	e = func(v reflect.Value) types.Value {
 		init.RLock()
 		defer init.RUnlock()
+		if !v.IsValid() {
+			return types.NewMap(vrw)
+		}
 		keys := v.MapKeys()
 		kvs := make([]types.Value, 2*len(keys))
 		for i, k := range keys {
