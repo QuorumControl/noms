@@ -24,6 +24,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 )
 
 const Separator = "::"
@@ -195,8 +196,32 @@ func parseAWSSpec(awsURL string) chunks.ChunkStore {
 	u, _ := url.Parse(awsURL)
 	parts := strings.SplitN(u.Host, ":", 2) // [table] [, bucket]?
 	d.PanicIfFalse(len(parts) == 2)
-	sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
-	return nbs.NewAWSStore(parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28)
+
+	var region string
+	if envRegion := os.Getenv("AWS_REGION"); envRegion != "" {
+		region = envRegion
+	} else {
+		region = "us-west-2"
+	}
+
+	sess := session.Must(session.NewSessionWithOptions(session.Options{
+		AssumeRoleTokenProvider: stscreds.StdinTokenProvider,
+		SharedConfigState: session.SharedConfigEnable,
+		Config: aws.Config{
+			CredentialsChainVerboseErrors: aws.Bool(true),
+			Region: aws.String(region),
+		},
+	}))
+
+	var path string
+
+	if os.Getenv("TRIM_LEADING") == "1" {
+		path = strings.TrimLeft(u.Path, "/")
+	} else {
+		path = u.Path
+	}
+
+	return nbs.NewAWSStore(parts[0], path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28)
 }
 
 // GetDataset returns the current Dataset instance for this Spec's Database.
